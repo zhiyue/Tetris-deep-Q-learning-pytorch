@@ -1,0 +1,10 @@
+Pillow
+# opencv-python
+torch
+torchvision
+torchaudio
+numpy
+matplotlib
+tensorboardX
+tensorboard
+torch-tb-profiler
