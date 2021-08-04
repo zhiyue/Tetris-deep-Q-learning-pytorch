@@ -28,12 +28,15 @@ def get_args():
     parser.add_argument("--initial_epsilon", type=float, default=1)
     parser.add_argument("--final_epsilon", type=float, default=1e-3)
     parser.add_argument("--num_decay_epochs", type=float, default=2000)
-    parser.add_argument("--num_epochs", type=int, default=3000)
+    parser.add_argument("--num_epochs", type=int, default=300000)
     parser.add_argument("--save_interval", type=int, default=1000)
     parser.add_argument("--replay_memory_size", type=int, default=30000,
                         help="Number of epoches between testing phases")
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
+    parser.add_argument("--start_epoch", type=int, default=0, help="Starting epoch number")
+    parser.add_argument("--resume", type=bool, default=True)
+    parser.add_argument("--render", type=bool, default=False)
 
     args = parser.parse_args()
     return args
@@ -50,8 +53,18 @@ def train(opt):
     writer = SummaryWriter(opt.log_path)
     env = Tetris(width=opt.width, height=opt.height, block_size=opt.block_size)
     model = DeepQNetwork()
+    # pre_model = torch.load("{}/tetris".format(opt.saved_path),  map_location=torch.device('cpu'))
+    # model.load_state_dict(pre_model.state_dict())
     optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
     criterion = nn.MSELoss()
+    start_epoch = opt.start_epoch
+    if opt.resume:
+        if os.path.isfile("{}/checkpoint".format(opt.saved_path)):
+            checkpoint = torch.load("{}/checkpoint".format(opt.saved_path))
+            start_epoch = checkpoint['epoch'] + 1
+            model.load_state_dict(checkpoint['model'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            print("=> loaded checkpoint (epoch {})".format(checkpoint['epoch']))
 
     state = env.reset()
     if torch.cuda.is_available():
@@ -59,7 +72,7 @@ def train(opt):
         state = state.cuda()
 
     replay_memory = deque(maxlen=opt.replay_memory_size)
-    epoch = 0
+    epoch = start_epoch
     while epoch < opt.num_epochs:
         next_steps = env.get_next_states()
         # Exploration or exploitation
@@ -83,7 +96,7 @@ def train(opt):
         next_state = next_states[index, :]
         action = next_actions[index]
 
-        reward, done = env.step(action, render=True)
+        reward, done = env.step(action, render=opt.render)
 
         if torch.cuda.is_available():
             next_state = next_state.cuda()
@@ -139,7 +152,16 @@ def train(opt):
         writer.add_scalar('Train/Cleared lines', final_cleared_lines, epoch - 1)
 
         if epoch > 0 and epoch % opt.save_interval == 0:
+            if not os.path.isdir(opt.saved_path):
+                  os.mkdir(opt.saved_path)
             torch.save(model, "{}/tetris_{}".format(opt.saved_path, epoch))
+            checkpoint = {
+                'epoch': epoch,
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+            }
+            torch.save(checkpoint, "{}/checkpoint_{}".format(opt.saved_path, epoch))
+            torch.save(checkpoint, "{}/checkpoint".format(opt.saved_path))
 
     torch.save(model, "{}/tetris".format(opt.saved_path))
 
