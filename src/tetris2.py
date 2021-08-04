@@ -42,7 +42,8 @@ class Tetris:
         self.score = 0
         self.status = 'stopped'
         self.op_record = []
-
+        self.tetrominoes = 0
+        self.cleared_lines = 0
         self.reset()
 
 
@@ -55,6 +56,8 @@ class Tetris:
 
         self.next_brick_raw_info = {}
         self.score = 0
+        self.tetrominoes = 0
+        self.cleared_lines = 0
         self.status = 'starting'
         self.op_record = []
         self.clear_grids()
@@ -106,7 +109,7 @@ class Tetris:
       return {"pos": pieces[shape_index][state_index], "color": piece_colors[color_index]}
 
     def is_brick_pos_valid(self, brick_info):
-      print(brick_info)
+      # print(brick_info)
       row = grid_config['row']
       col = grid_config['col']
       x_range = [0, col - 1]
@@ -216,7 +219,7 @@ class Tetris:
 
       # 触顶或者超过游戏的最大方块数量时，不计分数
       if ret["top_touched"] or ret["is_round_limited"]:
-        return ret["top_touched"], ret["is_round_limited"]
+        return 0, ret["top_touched"], ret["is_round_limited"]
 
 
       # 分数计算规则（富贵险中求）：界面上堆砌的格子数乘以当前消除行数的得分系数
@@ -230,7 +233,8 @@ class Tetris:
         self.grids.insert(0, [0] * grid_config['col'])
 
       self.score += score
-      return ret['top_touched'], ret['is_round_limited']
+      self.cleared_lines += len(full_row_indexes)
+      return score, ret['top_touched'], ret['is_round_limited']
 
     def get_brick_gaps(self, brick_info, grids):
       """
@@ -303,7 +307,7 @@ class Tetris:
         center_pos[1] += step_count
 
       is_valid, brick_info = self.get_brick_position(self.cur_brick_raw_info, center_pos)
-      gaps = self.get_brick_gaps(self.cur_brick_info, self.grids)
+      gaps = self.get_brick_gaps(brick_info, self.grids)
       if is_valid and not mute:
         self.cur_brick_info = brick_info
         self.cur_brick_center_pos = center_pos

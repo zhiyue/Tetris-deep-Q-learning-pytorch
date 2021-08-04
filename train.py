@@ -22,7 +22,7 @@ def get_args():
         """Implementation of Deep Q Network to play Tetris""")
     parser.add_argument("--width", type=int, default=10, help="The common width for all images")
     parser.add_argument("--height", type=int, default=20, help="The common height for all images")
-    parser.add_argument("--block_size", type=int, default=30, help="Size of a block")
+    parser.add_argument("--block_size", type=int, default=40, help="Size of a block")
     parser.add_argument("--batch_size", type=int, default=512, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--gamma", type=float, default=0.99)
@@ -98,16 +98,18 @@ def train(opt):
         next_state = next_states[index, :]
         action = next_actions[index]
 
-        reward, done = env.step(action, render=opt.render)
-
+        reward, done = env.step(action)
+        # print(action, reward)
         if torch.cuda.is_available():
             next_state = next_state.cuda()
         replay_memory.append([state, reward, next_state, done])
         if done:
-            final_score = env.score
-            final_tetrominoes = env.tetrominoes
-            final_cleared_lines = env.cleared_lines
-            state = env.reset()
+            final_score = env.tetris.score
+            final_tetrominoes = env.tetris.tetrominoes
+            final_cleared_lines = env.tetris.cleared_lines
+            # print(final_score, final_tetrominoes, final_cleared_lines)
+            print(','.join(env.tetris.op_record))
+            state = env.start()
             if torch.cuda.is_available():
                 state = state.cuda()
         else:
@@ -141,14 +143,14 @@ def train(opt):
         loss = criterion(q_values, y_batch)
         loss.backward()
         optimizer.step()
-
-        print("Epoch: {}/{}, Action: {}, Score: {}, Tetrominoes {}, Cleared lines: {}".format(
-            epoch,
-            opt.num_epochs,
-            action,
-            final_score,
-            final_tetrominoes,
-            final_cleared_lines))
+        if final_score > 0:
+            print("Epoch: {}/{}, Action: {}, Score: {}, Tetrominoes {}, Cleared lines: {}".format(
+                epoch,
+                opt.num_epochs,
+                action,
+                final_score,
+                final_tetrominoes,
+                final_cleared_lines))
         writer.add_scalar('Train/Score', final_score, epoch - 1)
         writer.add_scalar('Train/Tetrominoes', final_tetrominoes, epoch - 1)
         writer.add_scalar('Train/Cleared lines', final_cleared_lines, epoch - 1)

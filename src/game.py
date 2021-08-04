@@ -54,17 +54,40 @@ class Game:
       # 先执行位移
       gaps, _, _ = self.tetris.move(dir, step_count)
       bottom = gaps['bottom']
-
+    score = 1
+    game_over = False
     if ((need_update and bottom == 0) or force_update):
-      top_touched, is_round_limited = self.tetris.update()
+      step_score, top_touched, is_round_limited = self.tetris.update()
+      score += step_score
       if top_touched or is_round_limited:
-        max_brick_count, brick_count = self.tetris.max_brick_count, self.tetris.brick_count
+        game_over = True
         self.game_over()
       else:
         is_valid, brick_count = self.tetris.init_brick()
         if not is_valid:
+          game_over = True
           self.game_over()
+        gaps = self.tetris.get_brick_gaps(self.tetris.cur_brick_info, self.tetris.grids)
+        if gaps['bottom'] == 0:
+          game_over = True
+          self.game_over()
+    if self.tetris.status == 'stopped':
+      game_over = True
+      score -= 2
     self.render()
+    return score, game_over
+
+  def step(self, action, render=True):
+    (r, action, step_count) = action
+    for _ in range(r):
+      self.tetris.rotate()
+    if action == '':
+      score, game_over = self.play_step('', 0, force_update=True)
+    else:
+      score, game_over = self.play_step(action, step_count)
+    self.tetris.tetrominoes += 1
+    return score, game_over
+
 
   def hash_pos(self, pos):
     hash_str = ''
@@ -82,7 +105,7 @@ class Game:
     return len(to_delete), grids
 
   def remove_row(self, grids, to_delete):
-    for index in grids:
+    for index in to_delete:
       grids.pop(index)
       grids.insert(0, [0] * self.width)
     return grids
@@ -136,14 +159,13 @@ class Game:
       if hash_str in positions_seen:
         continue
       positions_seen.add(hash_str)
-      states[(r, '')] = self.get_state_properties(grids, cur_brick_pos)
+      # states[(r, '', 0)] = self.get_state_properties(grids, cur_brick_pos)
 
       gaps = self.tetris.get_brick_gaps(cur_brick_info, grids)
       gaps.pop('top')
       for direction, max_length in gaps.items():
         action = gap_action_map.get(direction)
-        for i in range(max_length):
-          op_record = f'{action}{i}'
+        for i in range(1, max_length+1):
           _, is_valid, brick_info = self.tetris.move(action, i, mute=True)
           if not is_valid:
             break
@@ -151,9 +173,11 @@ class Game:
           if hash_str in positions_seen:
             continue
           positions_seen.add(hash_str)
-          states[(r, op_record)] = self.get_state_properties(grids, brick_info['pos'])
+          states[(r, action, i)] = self.get_state_properties(grids, brick_info['pos'])
 
       is_valid, cur_brick_info = self.tetris.rotate(mute=True)
+    if len(states) == 0:
+      print(states)
     return states
 
   def game_over(self):
@@ -168,7 +192,7 @@ class Game:
 {grids_str}
       最后时刻的砖块位置信息：
 {brick_str}'''
-    print(msg)
+    # print(msg)
 
   def stop(self):
     self.tetris.status = 'stopped'
@@ -182,7 +206,8 @@ class Game:
     cur_brick_info = self.tetris.cur_brick_info
     if cur_brick_info:
       for (x, y) in cur_brick_info['pos']:
-        grids[y][x] = cur_brick_info['color']
+        if y > 0:
+          grids[y][x] = cur_brick_info['color']
 
     img = [grid for row in grids for grid in row ]
     img = np.array(img).reshape((self.height, self.width, 3)).astype(np.uint8)
