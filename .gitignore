@@ -1,0 +1,4 @@
+output.mp4
+src/__pycache__/*.pyc
+tensorboard/*
+trained_models/tetris_*
