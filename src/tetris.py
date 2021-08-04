@@ -121,7 +121,7 @@ class Tetris:
         for i in range(num_rotations):
             valid_xs = self.width - len(curr_piece[0])
             for x in range(valid_xs + 1):
-                piece = [row[:] for row in curr_piece]
+                piece = [row[:] for row in curr_piece] # 防止修改原来的list
                 pos = {"x": x, "y": 0}
                 while not self.check_collision(piece, pos):
                     pos["y"] += 1
