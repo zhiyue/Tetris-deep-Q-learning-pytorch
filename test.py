@@ -36,7 +36,8 @@ def test(opt):
     env.reset()
     if torch.cuda.is_available():
         model.cuda()
-    out = cv2.VideoWriter(opt.output, cv2.VideoWriter_fourcc(*"MJPG"), opt.fps,
+    # https://blog.csdn.net/u010420283/article/details/89706794
+    out = cv2.VideoWriter(opt.output, cv2.VideoWriter_fourcc(*"mp4v"), opt.fps,
                           (int(1.5*opt.width*opt.block_size), opt.height*opt.block_size))
     while True:
         next_steps = env.get_next_states()
@@ -52,7 +53,7 @@ def test(opt):
         if done:
             out.release()
             break
-        
+
 
 
 if __name__ == "__main__":
