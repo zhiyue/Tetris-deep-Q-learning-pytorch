@@ -7,6 +7,12 @@ from matplotlib import style
 import torch
 import copy
 
+gap_action_map = {
+  "right": "right",
+  "bottom": "down",
+  "left": "left",
+}
+
 class Game:
   def __init__(self, height=20, width=10, block_size=30):
     self.record = []
@@ -26,24 +32,28 @@ class Game:
     self.tetris.init_grids()
     self.tetris.init_brick()
     self.start_auto_run()
+    grids = copy.deepcopy(self.tetris.grids)
+    return self.get_state_properties(grids, self.tetris.cur_brick_info['pos'])
 
   def reset(self):
     self.record = []
     self.score = 0
     self.tetris.reset()
+
     # self.render()
 
   def start_auto_run(self, is_init=False):
     if self.tetris.status == 'running':
       self.play_step()
-      self.start_auto_run()
+      # self.start_auto_run()
 
   def play_step(self, dir='down', step_count=1, need_update=True, force_update=False):
 
     bottom = None
     if not force_update:
       # 先执行位移
-      bottom = self.tetris.move(dir, step_count)['bottom']
+      gaps, _, _ = self.tetris.move(dir, step_count)
+      bottom = gaps['bottom']
 
     if ((need_update and bottom == 0) or force_update):
       top_touched, is_round_limited = self.tetris.update()
@@ -56,11 +66,95 @@ class Game:
           self.game_over()
     self.render()
 
+  def hash_pos(self, pos):
+    hash_str = ''
+    for row in pos:
+      hash_str += ''.join(str(i) for i in row)
+    return hash_str
+
+  def check_cleared_rows(self, grids):
+    to_delete = []
+    for i, row in enumerate(grids[::-1]):
+      if 0 not in row:
+        to_delete.append(len(grids) - 1 - i)
+    if len(to_delete) > 0:
+      grids = self.remove_row(grids, to_delete)
+    return len(to_delete), grids
+
+  def remove_row(self, grids, to_delete):
+    for index in grids:
+      grids.pop(index)
+      grids.insert(0, [0] * self.width)
+    return grids
+
+  def get_state_properties(self, grids, cur_brick_pos):
+    for row_index, row in enumerate(grids):
+      for col_index, grid in enumerate(row):
+        if grid == 0:
+          grids[row_index][col_index] = (0,0,0)
+    lines_cleared, grids = self.check_cleared_rows(grids)
+    holes = self.get_holes(grids)
+    bumpiness, height = self.get_bumpiness_and_height(grids)
+
+    return torch.FloatTensor([lines_cleared, holes, bumpiness, height])
+
+  def get_holes(self, board):
+    num_holes = 0
+    for col in zip(*board):
+      row = 0
+      while row < self.height and col[row] == 0:
+        row += 1
+      num_holes += len([x for x in col[row + 1:] if x == 0])
+    return num_holes
+
+  def get_bumpiness_and_height(self, board):
+    board = np.array(board)
+    mask = board != 0
+    invert_heights = np.where(mask.any(axis=0), np.argmax(mask, axis=0), self.height)
+    heights = self.height - invert_heights
+    total_height = np.sum(heights)
+    currs = heights[:-1]
+    nexts = heights[1:]
+    diffs = np.abs(currs - nexts)
+    total_bumpiness = np.sum(diffs)
+    return total_bumpiness, total_height
+
+
   def get_next_states(self):
     states = {}
+    positions_seen = set()
 
+    grids = copy.deepcopy(self.tetris.grids)
+    # 旋转 3 个方向
+    is_valid = True
+    cur_brick_info = self.tetris.cur_brick_info
+    for r in range(4):
+      if not is_valid:
+        continue
+      cur_brick_pos = [row[:] for row in cur_brick_info['pos']]
+      hash_str = self.hash_pos(cur_brick_pos)
+      if hash_str in positions_seen:
+        continue
+      positions_seen.add(hash_str)
+      states[(r, '')] = self.get_state_properties(grids, cur_brick_pos)
 
-  def get_rotate_brick(self):
+      gaps = self.tetris.get_brick_gaps(cur_brick_info, grids)
+      gaps.pop('top')
+      for direction, max_length in gaps.items():
+        action = gap_action_map.get(direction)
+        for i in range(max_length):
+          op_record = f'{action}{i}'
+          _, is_valid, brick_info = self.tetris.move(action, i, mute=True)
+          if not is_valid:
+            break
+          hash_str = self.hash_pos(brick_info['pos'])
+          if hash_str in positions_seen:
+            continue
+          positions_seen.add(hash_str)
+          states[(r, op_record)] = self.get_state_properties(grids, brick_info['pos'])
+
+      is_valid, cur_brick_info = self.tetris.rotate(mute=True)
+    return states
 
   def game_over(self):
     op_record, score, brick_count = self.tetris.op_record, self.tetris.score, self.tetris.brick_count

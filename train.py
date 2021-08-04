@@ -13,6 +13,7 @@ from tensorboardX import SummaryWriter
 
 from src.deep_q_network import DeepQNetwork
 from src.tetris import Tetris
+from src.game import Game
 from collections import deque
 
 
@@ -51,7 +52,8 @@ def train(opt):
         shutil.rmtree(opt.log_path)
     os.makedirs(opt.log_path)
     writer = SummaryWriter(opt.log_path)
-    env = Tetris(width=opt.width, height=opt.height, block_size=opt.block_size)
+    # env = Tetris(width=opt.width, height=opt.height, block_size=opt.block_size)
+    env = Game(width=opt.width, height=opt.height, block_size=opt.block_size)
     model = DeepQNetwork()
     # pre_model = torch.load("{}/tetris".format(opt.saved_path),  map_location=torch.device('cpu'))
     # model.load_state_dict(pre_model.state_dict())
@@ -66,7 +68,7 @@ def train(opt):
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint (epoch {})".format(checkpoint['epoch']))
 
-    state = env.reset()
+    state = env.start()
     if torch.cuda.is_available():
         model.cuda()
         state = state.cuda()

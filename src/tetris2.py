@@ -286,7 +286,7 @@ class Tetris:
 
       return ret
 
-    def move(self, dir, step_count=1):
+    def move(self, dir, step_count=1, mute=False):
       """
       方块移动, 并返回移动后各方向的空格间隙
       :param dir: 方向
@@ -304,11 +304,11 @@ class Tetris:
 
       is_valid, brick_info = self.get_brick_position(self.cur_brick_raw_info, center_pos)
       gaps = self.get_brick_gaps(self.cur_brick_info, self.grids)
-      if is_valid:
+      if is_valid and not mute:
         self.cur_brick_info = brick_info
         self.cur_brick_center_pos = center_pos
         self.track_op(dir, step_count)
-      return gaps
+      return gaps, is_valid, brick_info
 
     def rotate(self, mute=False):
       """
@@ -327,11 +327,12 @@ class Tetris:
       }
 
       is_valid, brick_info = self.get_brick_position(cur_brick_raw_info, self.cur_brick_center_pos)
-      if is_valid:
+      if is_valid and not mute:
         self.state_index = state_index
         self.cur_brick_info = brick_info
         self.cur_brick_raw_info = cur_brick_raw_info
         self.track_op('rotate')
+      return is_valid, brick_info
 
     def drop(self):
       """
